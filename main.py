@@ -7,7 +7,7 @@ import yt_dlp
 from flask import Flask
 from threading import Thread
 
-# ----------------- 1. خادم Flask لإبقاء البوت أونلاين -----------------
+# ----------------- 1. خادم Flask لإبقاء البوت أونلاين 24/7 -----------------
 app = Flask('')
 
 @app.route('/')
@@ -29,7 +29,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 queues = {}
 
-# إعدادات yt-dlp الذكية لضمان تجاوز حظر الكوكيز والسيرفرات السحابية
+# إعدادات yt-dlp المتطورة لتجاوز حظر السيرفرات السحابية والكوكيز
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -54,7 +54,7 @@ FFMPEG_OPTIONS = {
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
-# ----------------- 3. واجهة الأزرار التفاعلية (Buttons UI) -----------------
+# ----------------- 3. واجهة الأزرار التفاعلية مع الاستجابة السريعة -----------------
 class MusicControlView(discord.ui.View):
     def __init__(self, ctx_or_interaction):
         super().__init__(timeout=None)
@@ -62,39 +62,42 @@ class MusicControlView(discord.ui.View):
 
     @discord.ui.button(label="⏸️ إيقاف مؤقت / استئناف", style=discord.ButtonStyle.secondary)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         vc = interaction.guild.voice_client
         if not vc:
-            return await interaction.response.send_message("البوت ليس في روم صوتي!", ephemeral=True)
+            return await interaction.followup.send("❌ البوت ليس في روم صوتي!", ephemeral=True)
         
         if vc.is_paused():
             vc.resume()
-            await interaction.response.send_message("▶️ تم استئناف التشغيل.", ephemeral=True)
+            await interaction.followup.send("▶️ تم استئناف التشغيل.", ephemeral=True)
         elif vc.is_playing():
             vc.pause()
-            await interaction.response.send_message("⏸️ تم الإيقاف المؤقت.", ephemeral=True)
+            await interaction.followup.send("⏸️ تم الإيقاف المؤقت.", ephemeral=True)
         else:
-            await interaction.response.send_message("لا يوجد شيء يعمل حالياً.", ephemeral=True)
+            await interaction.followup.send("❌ لا يوجد شيء يعمل حالياً.", ephemeral=True)
 
     @discord.ui.button(label="⏭️ تخطي", style=discord.ButtonStyle.primary)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         vc = interaction.guild.voice_client
         if vc and (vc.is_playing() or vc.is_paused()):
             vc.stop()
-            await interaction.response.send_message("⏭️ تم تخطي المقطع.", ephemeral=True)
+            await interaction.followup.send("⏭️ تم تخطي المقطع.", ephemeral=True)
         else:
-            await interaction.response.send_message("لا يوجد شيء لتخطيه.", ephemeral=True)
+            await interaction.followup.send("❌ لا يوجد شيء لتخطيه.", ephemeral=True)
 
     @discord.ui.button(label="⏹️ إيقاف شامل", style=discord.ButtonStyle.danger)
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
         guild_id = interaction.guild.id
         if guild_id in queues:
             queues[guild_id].clear()
         vc = interaction.guild.voice_client
         if vc:
             vc.stop()
-            await interaction.response.send_message("⏹️ تم إيقاف التشغيل وتفريغ قائمة الانتظار.", ephemeral=True)
+            await interaction.followup.send("⏹️ تم إيقاف التشغيل وتفريغ قائمة الانتظار.", ephemeral=True)
         else:
-            await interaction.response.send_message("البوت غير متصل.", ephemeral=True)
+            await interaction.followup.send("❌ البوت غير متصل.", ephemeral=True)
 
 # ----------------- 4. دالة تشغيل القائمة المتتابعة -----------------
 def play_next(guild_id, interaction_or_channel):
@@ -146,14 +149,12 @@ async def play_slash(interaction: discord.Interaction, query: str):
 
     loop = asyncio.get_event_loop()
     
-    # المحاولة 1: البحث عبر SoundCloud أولاً إذا كُتب اسم الأغنية (تتجنب حظر يوتيوب كلياً)
-    # المحاولة 2: البحث عبر يوتيوب بأشكال مختلفة إذا أخفقت المحاولة الأولى
     search_targets = []
     if query.startswith("http"):
         search_targets.append(query)
     else:
-        search_targets.append(f"scsearch:{query}")  # SoundCloud
-        search_targets.append(f"ytsearch:{query}")  # YouTube
+        search_targets.append(f"scsearch:{query}")
+        search_targets.append(f"ytsearch:{query}")
 
     data = None
     last_error = None
@@ -169,7 +170,7 @@ async def play_slash(interaction: discord.Interaction, query: str):
             last_error = e
 
     if not data:
-        return await interaction.followup.send(f"❌ تعذر استخراج الصوت. حاول كتابة اسم الأغنية مباشرة بدلاً من الرابط: {str(last_error)}")
+        return await interaction.followup.send(f"❌ تعذر استخراج الصوت: {str(last_error)}")
 
     song_info = {
         'url': data['url'],
@@ -191,25 +192,28 @@ async def play_slash(interaction: discord.Interaction, query: str):
 
 @bot.tree.command(name="s", description="تخطي الأغنية الحالية")
 async def skip_slash(interaction: discord.Interaction):
+    await interaction.response.defer()
     vc = interaction.guild.voice_client
     if vc and (vc.is_playing() or vc.is_paused()):
         vc.stop()
-        await interaction.response.send_message("⏭️ تم تخطي المقطع.")
+        await interaction.followup.send("⏭️ تم تخطي المقطع.")
     else:
-        await interaction.response.send_message("❌ لا يوجد شيء لتخطيه حالياً.")
+        await interaction.followup.send("❌ لا يوجد شيء لتخطيه حالياً.")
 
 @bot.tree.command(name="stop", description="إيقاف التشغيل تماماً وتفريغ القائمة")
 async def stop_slash(interaction: discord.Interaction):
+    await interaction.response.defer()
     guild_id = interaction.guild.id
     if guild_id in queues:
         queues[guild_id].clear()
     vc = interaction.guild.voice_client
     if vc:
         vc.stop()
-        await interaction.response.send_message("⏹️ تم الإيقاف وتفريغ قائمة الانتظار.")
+        await interaction.followup.send("⏹️ تم الإيقاف وتفريغ قائمة الانتظار.")
     else:
-        await interaction.response.send_message("❌ البوت ليس متصلاً بأي روم.")
+        await interaction.followup.send("❌ البوت ليس متصلاً بأي روم.")
 
+# ----------------- 6. تشغيل الخادم والبوت -----------------
 keep_alive()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
