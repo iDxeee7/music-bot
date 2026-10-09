@@ -7,12 +7,14 @@ import yt_dlp
 from flask import Flask
 from threading import Thread
 
-# ----------------- 1. خادم Flask لإبقاء البوت أونلاين 24/7 -----------------
+# ==============================================================================
+# 1. خادم Flask لإبقاء البوت شغالاً 24/7 على Render
+# ==============================================================================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Music Bot 24/7 is Running!"
+    return "Music Bot 24/7 is Running across all servers!"
 
 def run():
     port = int(os.environ.get("PORT", 8080))
@@ -22,13 +24,20 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# ----------------- 2. إعدادات البوت والـ YTDL -----------------
+# ==============================================================================
+# 2. إعدادات البوت والـ Intents
+# ==============================================================================
 intents = discord.Intents.default()
 intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# قاموس لحفظ قائمة التشغيل الخاصة بـ كل سيرفر بشكل منفصل
 queues = {}
 
+# ==============================================================================
+# 3. إعدادات استخراج الصوت (yt-dlp)
+# ==============================================================================
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -64,7 +73,9 @@ def format_duration(seconds):
     except:
         return "غير معروف"
 
-# ----------------- 3. واجهة الأزرار التفاعلية العصرية -----------------
+# ==============================================================================
+# 4. واجهة الأزرار التفاعلية العصرية للموسيقى
+# ==============================================================================
 class MusicControlView(discord.ui.View):
     def __init__(self, ctx_or_interaction):
         super().__init__(timeout=None)
@@ -109,7 +120,9 @@ class MusicControlView(discord.ui.View):
         else:
             await interaction.followup.send("❌ البوت غير متصل.", ephemeral=True)
 
-# ----------------- 4. دالة التشغيل والتصميم الفخم مع إظهار المنصة -----------------
+# ==============================================================================
+# 5. دالة التشغيل التلقائي وقائمة الانتظار لكل سيرفر
+# ==============================================================================
 def play_next(guild_id, interaction_or_channel):
     if guild_id in queues and len(queues[guild_id]) > 0:
         song = queues[guild_id].pop(0)
@@ -136,12 +149,19 @@ def play_next(guild_id, interaction_or_channel):
             bot.loop
         )
 
-# ----------------- 5. الأوامر والـ Slash Commands -----------------
+# ==============================================================================
+# 6. أحداث البوت (الجاهزية والمزامنة)
+# ==============================================================================
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
-    print(f'✅ البوت جاهز ويعمل باسم: {bot.user.name}')
+    # مزامنة أوامر السلاش مع كافة السيرفرات
+    synced = await bot.tree.sync()
+    print(f'✅ تم مزامنة {len(synced)} أمر سلاش مع كافة السيرفرات.')
+    print(f'✅ بوت الموسيقى جاهز ويعمل على {len(bot.guilds)} سيرفر باسم: {bot.user.name}')
 
+# ==============================================================================
+# 7. أوامر السلاش (Slash Commands)
+# ==============================================================================
 @bot.tree.command(name="p", description="تشغيل أغنية بالبحث أو الرابط")
 @app_commands.describe(query="اسم الأغنية أو الرابط")
 async def play_slash(interaction: discord.Interaction, query: str):
@@ -169,6 +189,7 @@ async def play_slash(interaction: discord.Interaction, query: str):
 
     loop = asyncio.get_event_loop()
     
+    # البحث الذكي: SoundCloud ثم YouTube
     search_targets = []
     if query.startswith("http"):
         search_targets.append(query)
@@ -192,7 +213,7 @@ async def play_slash(interaction: discord.Interaction, query: str):
     if not data:
         return await interaction.followup.send(f"❌ تعذر استخراج الصوت: {str(last_error)}")
 
-    # تحديد المنصة تلقائياً من نتائج الاستخراج
+    # تحديد اسم المنصة
     extractor = data.get('extractor_key', '').lower()
     if 'soundcloud' in extractor:
         platform_name = "SoundCloud 🟠"
@@ -253,8 +274,11 @@ async def stop_slash(interaction: discord.Interaction):
     else:
         await interaction.followup.send("❌ البوت ليس متصلاً بأي روم.")
 
-# ----------------- 6. تشغيل الخادم والبوت -----------------
+# ==============================================================================
+# 8. تشغيل الخادم والبوت
+# ==============================================================================
 keep_alive()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-bot.run(TOKEN)
+if TOKEN:
+    bot.run(TOKEN)
