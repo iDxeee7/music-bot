@@ -109,7 +109,7 @@ class MusicControlView(discord.ui.View):
         else:
             await interaction.followup.send("❌ البوت غير متصل.", ephemeral=True)
 
-# ----------------- 4. دالة التشغيل والتصميم الفخم -----------------
+# ----------------- 4. دالة التشغيل والتصميم الفخم مع إظهار المنصة -----------------
 def play_next(guild_id, interaction_or_channel):
     if guild_id in queues and len(queues[guild_id]) > 0:
         song = queues[guild_id].pop(0)
@@ -125,6 +125,7 @@ def play_next(guild_id, interaction_or_channel):
         )
         
         embed.add_field(name="⏱️ المدة", value=f"`{song['duration']}`", inline=True)
+        embed.add_field(name="🌐 المنصة / المصدر", value=f"`{song['platform']}`", inline=True)
         embed.add_field(name="👤 بواسطة", value=song['requester'].mention, inline=True)
         
         if song.get('thumbnail'):
@@ -191,11 +192,21 @@ async def play_slash(interaction: discord.Interaction, query: str):
     if not data:
         return await interaction.followup.send(f"❌ تعذر استخراج الصوت: {str(last_error)}")
 
+    # تحديد المنصة تلقائياً من نتائج الاستخراج
+    extractor = data.get('extractor_key', '').lower()
+    if 'soundcloud' in extractor:
+        platform_name = "SoundCloud 🟠"
+    elif 'youtube' in extractor:
+        platform_name = "YouTube 🔴"
+    else:
+        platform_name = data.get('extractor_key', 'مباشر 🎵')
+
     song_info = {
         'url': data['url'],
         'title': data.get('title', 'مقطع صوتي'),
         'link': data.get('webpage_url', query),
         'duration': format_duration(data.get('duration', 0)),
+        'platform': platform_name,
         'thumbnail': data.get('thumbnail'),
         'requester': interaction.user,
         'vc': vc,
@@ -210,6 +221,7 @@ async def play_slash(interaction: discord.Interaction, query: str):
             color=discord.Color.blue()
         )
         embed.add_field(name="⏱️ المدة", value=f"`{song_info['duration']}`", inline=True)
+        embed.add_field(name="🌐 المنصة", value=f"`{song_info['platform']}`", inline=True)
         if song_info.get('thumbnail'):
             embed.set_thumbnail(url=song_info['thumbnail'])
         await interaction.followup.send(embed=embed)
