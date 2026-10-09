@@ -15,7 +15,6 @@ def home():
     return "Music Bot 24/7 is Running!"
 
 def run():
-    # استخدام البورت المخصص ديناميكياً من Render
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
@@ -31,16 +30,22 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # قوائم التشغيل لكل سيرفر
 queues = {}
 
-# إعدادات yt-dlp مع إجبار IPv4 لتجاوز حظر يوتيوب على Render
+# إعدادات yt-dlp المعالجة لتجاوز قيود يوتيوب والحظر على الاستضافات
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch',
-    'source_address': '0.0.0.0',  # إجبار الاتصال عبر IPv4 لتفادي تعليق يوتيوب
+    'source_address': '0.0.0.0',
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
+    # تجاوز طلب تسجيل الدخول والكوكيز بمحاكاة مشغل تطبيق iOS
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['ios', 'mweb']
+        }
+    }
 }
 
 FFMPEG_OPTIONS = {
