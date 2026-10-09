@@ -27,10 +27,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# قوائم التشغيل لكل سيرفر
 queues = {}
 
-# إعدادات yt-dlp المعالجة لتجاوز قيود يوتيوب والحظر على الاستضافات
+# إعدادات yt-dlp الذكية لضمان تجاوز حظر الكوكيز والسيرفرات السحابية
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -40,10 +39,10 @@ YTDL_OPTIONS = {
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
-    # تجاوز طلب تسجيل الدخول والكوكيز بمحاكاة مشغل تطبيق iOS
     'extractor_args': {
         'youtube': {
-            'player_client': ['ios', 'mweb']
+            'player_client': ['android', 'web', 'ios'],
+            'skip': ['hls', 'dash']
         }
     }
 }
@@ -120,9 +119,8 @@ async def on_ready():
     await bot.tree.sync()
     print(f'✅ البوت جاهز ويعمل باسم: {bot.user.name}')
 
-# --- أمر التشغيل /p ---
-@bot.tree.command(name="p", description="تشغيل أغنية من يوتيوب، سبوتيفاي، ساوندكلاود أو بالبحث")
-@app_commands.describe(query="رابط أو اسم الأغنية")
+@bot.tree.command(name="p", description="تشغيل أغنية بالبحث أو الرابط")
+@app_commands.describe(query="اسم الأغنية أو الرابط")
 async def play_slash(interaction: discord.Interaction, query: str):
     await interaction.response.defer()
 
@@ -147,15 +145,31 @@ async def play_slash(interaction: discord.Interaction, query: str):
         queues[guild_id] = []
 
     loop = asyncio.get_event_loop()
-    search_target = query if query.startswith("http") else f"ytsearch:{query}"
     
-    try:
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(search_target, download=False))
-    except Exception as e:
-        return await interaction.followup.send(f"❌ تعذر العثور على المقطع أو التشغيل: {str(e)}")
+    # المحاولة 1: البحث عبر SoundCloud أولاً إذا كُتب اسم الأغنية (تتجنب حظر يوتيوب كلياً)
+    # المحاولة 2: البحث عبر يوتيوب بأشكال مختلفة إذا أخفقت المحاولة الأولى
+    search_targets = []
+    if query.startswith("http"):
+        search_targets.append(query)
+    else:
+        search_targets.append(f"scsearch:{query}")  # SoundCloud
+        search_targets.append(f"ytsearch:{query}")  # YouTube
 
-    if 'entries' in data and data['entries']:
-        data = data['entries'][0]
+    data = None
+    last_error = None
+
+    for target in search_targets:
+        try:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(target, download=False))
+            if data and 'entries' in data and data['entries']:
+                data = data['entries'][0]
+            if data:
+                break
+        except Exception as e:
+            last_error = e
+
+    if not data:
+        return await interaction.followup.send(f"❌ تعذر استخراج الصوت. حاول كتابة اسم الأغنية مباشرة بدلاً من الرابط: {str(last_error)}")
 
     song_info = {
         'url': data['url'],
@@ -175,7 +189,6 @@ async def play_slash(interaction: discord.Interaction, query: str):
         play_next(guild_id, interaction.channel)
         await interaction.followup.send("🎶 جاري إعداد وتكليف التشغيل...")
 
-# --- أمر التخطي /s ---
 @bot.tree.command(name="s", description="تخطي الأغنية الحالية")
 async def skip_slash(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
@@ -185,7 +198,6 @@ async def skip_slash(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ لا يوجد شيء لتخطيه حالياً.")
 
-# --- أمر الإيقاف /stop ---
 @bot.tree.command(name="stop", description="إيقاف التشغيل تماماً وتفريغ القائمة")
 async def stop_slash(interaction: discord.Interaction):
     guild_id = interaction.guild.id
@@ -198,7 +210,6 @@ async def stop_slash(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ البوت ليس متصلاً بأي روم.")
 
-# ----------------- 6. تشغيل الخادم والبوت -----------------
 keep_alive()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
