@@ -15,7 +15,9 @@ def home():
     return "Music Bot 24/7 is Running!"
 
 def run():
-    app.run(host='0.0.0.0', port=8080)
+    # استخدام البورت المخصص ديناميكياً من Render
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
@@ -174,4 +176,16 @@ async def stop_slash(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     if guild_id in queues:
         queues[guild_id].clear()
-    vc = interaction.guild.voice_
+    vc = interaction.guild.voice_client
+    if vc:
+        vc.stop()
+        await interaction.response.send_message("⏹️ تم الإيقاف وتفريغ قائمة الانتظار.")
+    else:
+        await interaction.response.send_message("❌ البوت ليس متصلاً بأي روم.")
+
+# ----------------- 6. تشغيل الخادم والبوت -----------------
+keep_alive()
+
+# يستخرج التوكن بأمان من متغيرات البيئة في Render
+TOKEN = os.getenv("DISCORD_TOKEN")
+bot.run(TOKEN)
