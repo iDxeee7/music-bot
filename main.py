@@ -31,11 +31,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # قوائم التشغيل لكل سيرفر
 queues = {}
 
+# إعدادات yt-dlp مع إجبار IPv4 لتجاوز حظر يوتيوب على Render
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
-    'noplaylist': False,
+    'noplaylist': True,
     'quiet': True,
-    'default_search': 'auto',
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',  # إجبار الاتصال عبر IPv4 لتفادي تعليق يوتيوب
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
 }
 
 FFMPEG_OPTIONS = {
@@ -96,7 +101,7 @@ def play_next(guild_id, interaction_or_channel):
         player = discord.FFmpegPCMAudio(song['url'], **FFMPEG_OPTIONS)
         vc.play(player, after=lambda e: play_next(guild_id, interaction_or_channel))
         
-        embed = discord.Embed(title="🎵 جاري التشغيل الان", description=f"[{song['title']}]({song['link']})", color=discord.Color.green())
+        embed = discord.Embed(title="🎵 جاري التشغيل الآن", description=f"[{song['title']}]({song['link']})", color=discord.Color.green())
         embed.add_field(name="المدة / المنصة", value=song.get('duration', 'غير معروف'))
         
         asyncio.run_coroutine_threadsafe(
@@ -122,10 +127,15 @@ async def play_slash(interaction: discord.Interaction, query: str):
     voice_channel = interaction.user.voice.channel
     vc = interaction.guild.voice_client
 
-    if vc is None:
-        vc = await voice_channel.connect()
-    elif vc.channel.id != voice_channel.id:
-        await vc.move_to(voice_channel)
+    try:
+        if vc is None:
+            vc = await voice_channel.connect()
+        elif vc.channel.id != voice_channel.id:
+            await vc.move_to(voice_channel)
+    except discord.errors.Forbidden:
+        return await interaction.followup.send("❌ ليس لدي صلاحية للاتصال بالروم الصوتي الخاص بك!")
+    except Exception as e:
+        return await interaction.followup.send(f"❌ تعذر الاتصال بالروم: {str(e)}")
 
     guild_id = interaction.guild.id
     if guild_id not in queues:
@@ -186,6 +196,5 @@ async def stop_slash(interaction: discord.Interaction):
 # ----------------- 6. تشغيل الخادم والبوت -----------------
 keep_alive()
 
-# يستخرج التوكن بأمان من متغيرات البيئة في Render
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
